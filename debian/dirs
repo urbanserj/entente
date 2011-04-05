@@ -1,0 +1,5 @@
+etc
+etc/init.d
+etc/default
+usr/sbin
+var/run

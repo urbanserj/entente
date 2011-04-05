@@ -1,0 +1,5 @@
+#!/bin/sh -e
+
+if [ -x /etc/init.d/entente ]; then
+	invoke-rc.d entente stop
+fi

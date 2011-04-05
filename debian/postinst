@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+umask 0022
+
+. /usr/share/debconf/confmodule
+
+update-rc.d entente defaults 90 > /dev/null
+invoke-rc.d entente start
+
+db_stop
