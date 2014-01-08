@@ -1,0 +1,9 @@
+# Generated asn1c output.
+asn1/
+# Debian packaging output.
+debian/entente.debhelper.log
+debian/entente.substvars
+debian/entente/
+debian/files
+# The binary output.
+entente
