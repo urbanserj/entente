@@ -5,7 +5,7 @@ LDFLAGS=-lev -lpam
 all: asn1
 	$(CC) -Iasn1/ $(CFLAGS) $(LDFLAGS) main.c asn1/*.c -o entente
 
-.PHONY : clean debian 
+.PHONY : clean debian
 
 asn1:
 	mkdir asn1 && ( cd asn1; asn1c -pdu=auto -fcompound-names ../ldap.asn1; rm converter-sample.c )
@@ -24,3 +24,6 @@ install:
 
 debian:
 	dpkg-buildpackage -rfakeroot
+
+debclean:
+	debian/rules clean
