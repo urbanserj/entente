@@ -7,3 +7,5 @@ debian/entente/
 debian/files
 # The binary output.
 entente
+# Editor backup files.
+*~
