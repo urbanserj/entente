@@ -35,6 +35,7 @@
 #define LISTENQ 128
 #define LDAP_PORT 389
 #define BUF_SIZE 16384
+#define FAIL_AUTH_DELAY 1.0
 
 #define BASEDN "dc=entente"
 
@@ -59,25 +60,32 @@
 	} \
 } while ( 0 )
 
-extern int ldap_start();
-extern void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
-extern void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+int ldap_start();
+void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
 
-extern void ldap_bind(int msgid, BindRequest_t *req, struct ev_loop *loop, struct ev_io *watcher);
-extern void ldap_search(int msgid, SearchRequest_t *req, struct ev_loop *loop, struct ev_io *watcher);
-extern ssize_t ldap_send(int sd, LDAPMessage_t* msg);
+void ldap_bind(int msgid, BindRequest_t *req, struct ev_loop *loop, struct ev_io *watcher);
+void ldap_search(int msgid, SearchRequest_t *req, struct ev_loop *loop, struct ev_io *watcher);
+ssize_t ldap_send(int sd, LDAPMessage_t* msg);
 
 typedef struct {
 	const char *user, *pw;
 } auth_pam_userinfo;
 
-extern const char *auth_pam(const char *cn, const char *pw);
-extern int auth_pam_talker(int num_msg, const struct pam_message ** msg, struct pam_response ** resp, void *appdata_ptr);
+const char *auth_pam(const char *cn, const char *pw);
+int auth_pam_talker(int num_msg, const struct pam_message ** msg, struct pam_response ** resp, void *appdata_ptr);
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
-extern char *cn2name(const char *cn);
+char *cn2name(const char *cn);
 
-extern void settings(int argc, char **argv);
-extern void daemonizing();
+typedef struct {
+	LDAPMessage_t *res;
+	LDAPDN_t *ldapdn;
+	struct ev_io *watcher;
+} ldap_auth_fail_t;
+void ldap_auth_fail_cb(EV_P_ struct ev_timer *w, int revents);
+
+void settings(int argc, char **argv);
+void daemonizing();
 
 int daemonize = 0;
 
@@ -237,8 +245,24 @@ void ldap_bind(int msgid, BindRequest_t *req, struct ev_loop *loop, struct ev_io
 		if ( status[0] == '\0' ) { /* ok */
 			asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_success);
 		} else { /* fail */
+			struct ev_timer *fail_timer = calloc(1, sizeof(struct ev_timer));
+			ldap_auth_fail_t *data;
+
+			ev_timer_init (fail_timer, ldap_auth_fail_cb, FAIL_AUTH_DELAY, 0.0);
+			data = fail_timer->data = calloc(1, sizeof(ldap_auth_fail_t));
+			if ( data == NULL )
+				fail("calloc");
+
 			asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_other);
 			OCTET_STRING_fromString(&bindResponse->diagnosticMessage, status);
+
+			data->res = res;
+			data->ldapdn = ldapdn;
+			data->watcher = watcher;
+			ev_timer_start(loop, fail_timer);
+
+			free((void *) status);
+			return;
 		}
 		free((void *) status);
 	} else {
@@ -424,7 +448,19 @@ int auth_pam_talker(int num_msg, const struct pam_message ** msg, struct pam_res
 
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr)
 {
-    // TODO(abo): Make this delay followup bind attempts.
+}
+
+void ldap_auth_fail_cb(struct ev_loop *loop, struct ev_timer *w, int revents)
+{
+	ldap_auth_fail_t *data = w->data;
+	if ( ldap_send(data->watcher->fd, data->res) <= 0 ) {
+		ev_close(loop, data->watcher);
+		perror("ldap_send");
+	}
+	free(data->ldapdn);
+	ldapmessage_free(data->res);
+	free(data);
+	free(w);
 }
 
 
