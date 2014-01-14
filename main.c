@@ -73,6 +73,7 @@ typedef struct {
 
 extern const char *auth_pam(const char *cn, const char *pw);
 extern int auth_pam_talker(int num_msg, const struct pam_message ** msg, struct pam_response ** resp, void *appdata_ptr);
+void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
 extern char *cn2name(const char *cn);
 
 extern void settings(int argc, char **argv);
@@ -166,7 +167,7 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
 
 	if ( EV_ERROR & revents )
 		fail("got invalid event");
-	
+
 	bzero(buf, sizeof(buf));
 	buf_cnt = recv(watcher->fd, buf, sizeof(buf), 0);
 
@@ -360,16 +361,18 @@ const char *auth_pam(const char *cn, const char *pw)
 	if ( userinfo.user[0] == '\0' ) {
 		sprintf(status, "Bad user: %s\n", cn);
 	} else
-	/* start pam */
-	if ( PAM_SUCCESS != (pam_res = pam_start("entente", userinfo.user, &conv_info, &pamh)) &&
-	     PAM_SUCCESS != pam_fail_delay(pamh, 0) ) {
+	/* Start pam. */
+	if ( PAM_SUCCESS != (pam_res = pam_start("entente", userinfo.user, &conv_info, &pamh)) ) {
 		sprintf(status, "PAM: Could not start pam service: %s\n", pam_strerror(pamh, pam_res));
 	} else {
-		/* try auth */
-		if ( PAM_SUCCESS != (pam_res = pam_authenticate(pamh, PAM_DISALLOW_NULL_AUTHTOK)) )
+		/* Set failure delay handler function. */
+		if ( PAM_SUCCESS != (pam_res = pam_set_item(pamh, PAM_FAIL_DELAY, &auth_pam_delay)) )
+			sprintf(status, "PAM: Could not set failure delay handler: %s\n", pam_strerror(pamh, pam_res));
+		/* Try auth. */
+		else if ( PAM_SUCCESS != (pam_res = pam_authenticate(pamh, PAM_DISALLOW_NULL_AUTHTOK)) )
 			sprintf(status, "PAM: user %s - not authenticated: %s\n", userinfo.user, pam_strerror(pamh, pam_res));
-		else /* check that the account is healthy */
-		if ( PAM_SUCCESS != (pam_res = pam_acct_mgmt(pamh, PAM_DISALLOW_NULL_AUTHTOK)) )
+		/* Check that the account is healthy. */
+		else if ( PAM_SUCCESS != (pam_res = pam_acct_mgmt(pamh, PAM_DISALLOW_NULL_AUTHTOK)) )
 			sprintf(status, "PAM: user %s - invalid account: %s", userinfo.user, pam_strerror(pamh, pam_res));
 		else /* success */
 			status[0] = '\0';
@@ -416,6 +419,12 @@ int auth_pam_talker(int num_msg, const struct pam_message ** msg, struct pam_res
 	/* everything okay, set PAM response values */
 	*resp = res;
 	return PAM_SUCCESS;
+}
+
+
+void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr)
+{
+    // TODO(abo): Make this delay followup bind attempts.
 }
 
 
