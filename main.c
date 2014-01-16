@@ -85,13 +85,15 @@ typedef struct {
 void ldap_auth_fail_cb(EV_P_ struct ev_timer *w, int revents);
 
 void settings(int argc, char **argv);
-void daemonizing();
-
 int daemonize = 0;
 
 int main(int argc, char **argv)
 {
 	settings(argc, argv);
+	if (daemonize && daemon(0,0)) {
+		perror("daemon");
+		exit(1);
+	}
 	return ldap_start();
 }
 
@@ -103,9 +105,6 @@ int ldap_start()
 
 	struct ev_loop *loop = EV_DEFAULT;
 	struct ev_io w_accept;
-
-	if (daemonize)
-		daemonizing();
 
 	if ((serv_sd = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("socket");
@@ -503,27 +502,4 @@ void settings(int argc, char **argv)
 		sprintf(buf, "%d", LDAP_PORT);
 		_setenv("ENTENTE_PORT", buf);
 	}
-}
-
-void daemonizing()
-{
-	pid_t pid, sid;
-	pid = fork();
-
-	if (pid < 0) {
-		perror("fork");
-		exit(1);
-	} else if (pid > 0) {
-		exit(0);
-	}
-
-	sid = setsid();
-	if (sid < 0) {
-		perror("setsid");
-		exit(1);
-	}
-
-	close(STDIN_FILENO);
-	close(STDOUT_FILENO);
-	close(STDERR_FILENO);
 }
