@@ -90,7 +90,7 @@ int daemonize = 0;
 int main(int argc, char **argv)
 {
 	settings(argc, argv);
-	if (daemonize && daemon(0,0)) {
+	if (daemonize && daemon(0, 0)) {
 		perror("daemon");
 		exit(1);
 	}
@@ -458,11 +458,7 @@ char *cn2name(const char *cn)
 	/* cn=$username$,BASEDN => $username$ */
 	char *pos = index(cn, ',');
 
-	if (!pos)
-		return NULL;
-	if (strncmp(cn, "cn=", 3) != 0)
-		return NULL;
-	if (strcmp(pos + 1, BASEDN) != 0)
+	if (!pos || strncmp(cn, "cn=", 3) != 0 || strcmp(pos + 1, BASEDN) != 0)
 		return NULL;
 	return strndup(cn + 3, pos - (cn + 3));
 }
