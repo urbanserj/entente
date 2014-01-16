@@ -119,9 +119,9 @@ int ldap_start()
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr =
-	    htonl((getenv("ENTENTE_LOOPBACK")
-		   && strcmp(getenv("ENTENTE_LOOPBACK"), "false") == 0) ? INADDR_ANY : INADDR_LOOPBACK);
+	servaddr.sin_addr.s_addr = htonl((getenv("ENTENTE_LOOPBACK")
+					  && strcmp(getenv("ENTENTE_LOOPBACK"), "false") == 0)
+					 ? INADDR_ANY : INADDR_LOOPBACK);
 	servaddr.sin_port = htons(atoi(getenv("ENTENTE_PORT")));
 
 	if (bind(serv_sd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
@@ -372,7 +372,7 @@ const char *auth_pam(const char *cn, const char *pw)
 	conv_info.conv = &auth_pam_talker;
 	conv_info.appdata_ptr = (void *)&userinfo;
 
-	if (userinfo.user[0] == '\0') {
+	if (!userinfo.user) {
 		sprintf(status, "Bad user: %s\n", cn);
 	} else
 		/* Start pam. */
@@ -457,29 +457,15 @@ void ldap_auth_fail_cb(struct ev_loop *loop, struct ev_timer *w, int revents)
 char *cn2name(const char *cn)
 {
 	/* cn=$username$,BASEDN => $username$ */
+	char *pos = index(cn, ',');
 
-	char *pos;
-	size_t basednlen = strlen(BASEDN);
-	char *name = (char *)malloc(strlen(cn));
-
-	strncpy(name, cn, 3);
-	name[3] = '\0';
-	if (strcmp(name, "cn=") != 0)
-		goto BADNAME;
-
-	strcpy(name, cn + 3);
-	if ((pos = strstr((const char *)name, "," BASEDN)) == NULL)
-		goto BADNAME;
-
-	if (strlen(pos) != (basednlen + 1))
-		goto BADNAME;
-
-	*pos = '\0';
-	return name;
-
- BADNAME:
-	name[0] = '\0';
-	return name;
+	if (!pos)
+		return NULL;
+	if (strncmp(cn, "cn=", 3) != 0)
+		return NULL;
+	if (strcmp(pos + 1, BASEDN) != 0)
+		return NULL;
+	return strndup(cn + 3, pos - (cn + 3));
 }
 
 void settings(int argc, char **argv)
