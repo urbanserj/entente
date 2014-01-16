@@ -257,9 +257,11 @@ void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_i
 		/* Stop the connection watcher to stop other requests while delayed. */
 		ev_io_stop(loop, watcher);
 		ev_timer_start(loop, delay_timer);
-	} else if (ldap_send(watcher->fd, res) <= 0) {
-		ev_close(loop, watcher);
-		perror("ldap_send");
+	} else {
+		if (ldap_send(watcher->fd, res) <= 0) {
+			ev_close(loop, watcher);
+			perror("ldap_send");
+		}
 		ldapmessage_free(res);
 		free(ldapdn);
 	}
