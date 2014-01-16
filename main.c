@@ -221,8 +221,6 @@ void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_i
 	LDAPMessage_t *res = calloc(1, sizeof(LDAPMessage_t));
 	if (res == NULL)
 		fail("calloc");
-	bzero(res, sizeof(*res));
-
 	res->messageID = msgid;
 	res->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
 	BindResponse_t *bindResponse = &res->protocolOp.choice.bindResponse;
@@ -290,8 +288,6 @@ void ldap_search(int msgid, SearchRequest_t * req, struct ev_loop *loop, struct 
 	res = calloc(1, sizeof(LDAPMessage_t));
 	if (res == NULL)
 		fail("calloc");
-	bzero(res, sizeof(*res));
-
 	res->messageID = msgid;
 
 	if (!bad_dn && !bad_filter) {
