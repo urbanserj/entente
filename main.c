@@ -65,7 +65,7 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
 
 void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_io *watcher);
 void ldap_search(int msgid, SearchRequest_t * req, struct ev_loop *loop, struct ev_io *watcher);
-ssize_t ldap_send(int sd, LDAPMessage_t * msg);
+ssize_t ldap_send(LDAPMessage_t * msg, struct ev_loop *loop, struct ev_io *watcher);
 
 typedef struct {
 	const char *user, *pw;
@@ -258,10 +258,7 @@ void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_i
 		ev_io_stop(loop, watcher);
 		ev_timer_start(loop, delay_timer);
 	} else {
-		if (ldap_send(watcher->fd, res) <= 0) {
-			ev_close(loop, watcher);
-			perror("ldap_send");
-		}
+		ldap_send(res, loop, watcher);
 		ldapmessage_free(res);
 		free(ldapdn);
 	}
@@ -299,11 +296,10 @@ void ldap_search(int msgid, SearchRequest_t * req, struct ev_loop *loop, struct 
 
 		OCTET_STRING_fromString(&searchResEntry->objectName, user);
 
-		if (ldap_send(watcher->fd, res) <= 0) {
-			ev_close(loop, watcher);
+		if (ldap_send(res, loop, watcher) <= 0) {
 			free(searchResEntry->objectName.buf);
 			ldapmessage_free(res);
-			fail("ldap_send");
+			return;
 		}
 
 		free(searchResEntry->objectName.buf);
@@ -324,15 +320,11 @@ void ldap_search(int msgid, SearchRequest_t * req, struct ev_loop *loop, struct 
 		OCTET_STRING_fromString(&searchDone->matchedDN, BASEDN);
 	}
 
-	if (ldap_send(watcher->fd, res) <= 0) {
-		ev_close(loop, watcher);
-		perror("ldap_send");
-	}
-
+	ldap_send(res, loop, watcher);
 	ldapmessage_free(res);
 }
 
-ssize_t ldap_send(int sd, LDAPMessage_t * msg)
+ssize_t ldap_send(LDAPMessage_t * msg, struct ev_loop *loop, struct ev_io *watcher)
 {
 	char buf[BUF_SIZE];
 	ssize_t buf_cnt;
@@ -342,11 +334,13 @@ ssize_t ldap_send(int sd, LDAPMessage_t * msg)
 
 	bzero(buf, sizeof(buf));
 	rencode = der_encode_to_buffer(&asn_DEF_LDAPMessage, msg, &buf, sizeof(buf));
-	buf_cnt = write(sd, buf, rencode.encoded);
+	buf_cnt = write(watcher->fd, buf, rencode.encoded);
 
-	if (rencode.encoded != buf_cnt)
+	if (rencode.encoded != buf_cnt) {
+		ev_close(loop, watcher);
+		perror("ldap_send");
 		return -1;
-
+	}
 	return buf_cnt;
 }
 
@@ -433,10 +427,8 @@ void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr)
 void ldap_delay_cb(struct ev_loop *loop, struct ev_timer *w, int revents)
 {
 	ldap_delay_data *data = w->data;
-	if (ldap_send(data->watcher->fd, data->res) <= 0) {
-		ev_close(loop, data->watcher);
-		perror("ldap_send");
-	}
+
+	ldap_send(data->res, loop, data->watcher);
 	/* Restart the connection watcher. */
 	ev_io_start(loop, data->watcher);
 	free(data->ldapdn);
