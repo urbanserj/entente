@@ -43,7 +43,7 @@
 	close(watcher->fd); \
 	free(watcher); \
 } while ( 0 )
-#define ldapmessage_free(msg) asn_DEF_LDAPMessage.free_struct(&asn_DEF_LDAPMessage, msg, 0)
+#define ldapmessage_free(msg) ASN_STRUCT_FREE(asn_DEF_LDAPMessage, msg)
 
 #ifdef DEBUG
 #define LDAP_DEBUG(msg) asn_fprint(stdout, &asn_DEF_LDAPMessage, msg)
@@ -76,7 +76,6 @@ void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
 
 typedef struct {
 	LDAPMessage_t *res;
-	LDAPDN_t *ldapdn;
 	ev_io *watcher;
 } ldap_delay_data_t;
 void ldap_delay_cb(EV_P_ ev_timer *w, int revents);
@@ -214,14 +213,13 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	ev_tstamp delay = 0.0;
 
-	LDAPDN_t *ldapdn = OCTET_STRING_new_fromBuf(&asn_DEF_LDAPString, (const char *)req->name.buf, req->name.size);
 	LDAPMessage_t *res = calloc(1, sizeof(LDAPMessage_t));
 	if (res == NULL)
 		fail("calloc");
 	res->messageID = msgid;
 	res->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
 	BindResponse_t *bindResponse = &res->protocolOp.choice.bindResponse;
-	bindResponse->matchedDN = *ldapdn;
+	OCTET_STRING_fromBuf(&bindResponse->matchedDN, (const char *)req->name.buf, req->name.size);
 
 	if (getenv("ENTENTE_ANONYMOUS") && req->name.size == 0) {
 		/* allow anonymous */
@@ -249,7 +247,6 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 		ev_timer *delay_timer = calloc(1, sizeof(ev_timer));
 		ldap_delay_data_t *data = calloc(1, sizeof(ldap_delay_data_t));
 		data->res = res;
-		data->ldapdn = ldapdn;
 		data->watcher = watcher;
 		ev_timer_init(delay_timer, ldap_delay_cb, delay, 0.0);
 		delay_timer->data = data;
@@ -259,7 +256,6 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 	} else {
 		ldap_send(res, loop, watcher);
 		ldapmessage_free(res);
-		free(ldapdn);
 	}
 }
 
@@ -430,7 +426,6 @@ void ldap_delay_cb(ev_loop *loop, ev_timer *w, int revents)
 	ldap_send(data->res, loop, data->watcher);
 	/* Restart the connection watcher. */
 	ev_io_start(loop, data->watcher);
-	free(data->ldapdn);
 	ldapmessage_free(data->res);
 	free(data);
 	free(w);
