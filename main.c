@@ -61,6 +61,11 @@
 int ldap_start();
 void accept_cb(ev_loop *loop, ev_io *watcher, int revents);
 void read_cb(ev_loop *loop, ev_io *watcher, int revents);
+typedef struct {
+	LDAPMessage_t *message;
+	ev_io *watcher;
+} delay_data_t;
+void delay_cb(EV_P_ ev_timer *w, int revents);
 
 void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher);
 void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher);
@@ -73,12 +78,6 @@ typedef struct {
 int auth_pam(const char *user, const char *pw, const char **msg, ev_tstamp *delay);
 int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr);
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
-
-typedef struct {
-	LDAPMessage_t *res;
-	ev_io *watcher;
-} ldap_delay_data_t;
-void ldap_delay_cb(EV_P_ ev_timer *w, int revents);
 
 char *cn2name(const char *cn);
 void settings(int argc, char **argv);
@@ -209,16 +208,28 @@ void read_cb(ev_loop *loop, ev_io *watcher, int revents)
 	ldapmessage_free(req);
 }
 
+void delay_cb(ev_loop *loop, ev_timer *w, int revents)
+{
+	delay_data_t *data = w->data;
+
+	ldap_send(data->message, loop, data->watcher);
+	/* Restart the connection watcher. */
+	ev_io_start(loop, data->watcher);
+	ldapmessage_free(data->message);
+	free(data);
+	free(w);
+}
+
 void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	ev_tstamp delay = 0.0;
 
-	LDAPMessage_t *res = calloc(1, sizeof(LDAPMessage_t));
-	if (res == NULL)
+	LDAPMessage_t *response = calloc(1, sizeof(LDAPMessage_t));
+	if (response == NULL)
 		fail("calloc");
-	res->messageID = msgid;
-	res->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
-	BindResponse_t *bindResponse = &res->protocolOp.choice.bindResponse;
+	response->messageID = msgid;
+	response->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
+	BindResponse_t *bindResponse = &response->protocolOp.choice.bindResponse;
 	OCTET_STRING_fromBuf(&bindResponse->matchedDN, (const char *)req->name.buf, req->name.size);
 
 	if (getenv("ENTENTE_ANONYMOUS") && req->name.size == 0) {
@@ -245,17 +256,17 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 	}
 	if (delay > 0.0) {
 		ev_timer *delay_timer = calloc(1, sizeof(ev_timer));
-		ldap_delay_data_t *data = calloc(1, sizeof(ldap_delay_data_t));
-		data->res = res;
+		delay_data_t *data = calloc(1, sizeof(delay_data_t));
+		data->message = response;
 		data->watcher = watcher;
-		ev_timer_init(delay_timer, ldap_delay_cb, delay, 0.0);
+		ev_timer_init(delay_timer, delay_cb, delay, 0.0);
 		delay_timer->data = data;
 		/* Stop the connection watcher to stop other requests while delayed. */
 		ev_io_stop(loop, watcher);
 		ev_timer_start(loop, delay_timer);
 	} else {
-		ldap_send(res, loop, watcher);
-		ldapmessage_free(res);
+		ldap_send(response, loop, watcher);
+		ldapmessage_free(response);
 	}
 }
 
@@ -417,18 +428,6 @@ void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr)
 	/* Only set the delay if the auth failed. */
 	if (PAM_SUCCESS != retval)
 		data->delay = usec_delay * 1.0e-6;
-}
-
-void ldap_delay_cb(ev_loop *loop, ev_timer *w, int revents)
-{
-	ldap_delay_data_t *data = w->data;
-
-	ldap_send(data->res, loop, data->watcher);
-	/* Restart the connection watcher. */
-	ev_io_start(loop, data->watcher);
-	ldapmessage_free(data->res);
-	free(data);
-	free(w);
 }
 
 char *cn2name(const char *cn)
