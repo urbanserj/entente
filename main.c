@@ -60,27 +60,27 @@
 } while ( 0 )
 
 int ldap_start();
-void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
-void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
+void accept_cb(ev_loop *loop, ev_io *watcher, int revents);
+void read_cb(ev_loop *loop, ev_io *watcher, int revents);
 
-void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_io *watcher);
-void ldap_search(int msgid, SearchRequest_t * req, struct ev_loop *loop, struct ev_io *watcher);
-ssize_t ldap_send(LDAPMessage_t * msg, struct ev_loop *loop, struct ev_io *watcher);
+void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher);
+void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher);
+ssize_t ldap_send(LDAPMessage_t *msg, ev_loop *loop, ev_io *watcher);
 
 typedef struct {
 	const char *user, *pw;
 	ev_tstamp delay;
-} auth_pam_data;
-int auth_pam(const char *user, const char *pw, const char **msg, ev_tstamp * delay);
+} auth_pam_data_t;
+int auth_pam(const char *user, const char *pw, const char **msg, ev_tstamp *delay);
 int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr);
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
 
 typedef struct {
 	LDAPMessage_t *res;
 	LDAPDN_t *ldapdn;
-	struct ev_io *watcher;
-} ldap_delay_data;
-void ldap_delay_cb(EV_P_ struct ev_timer *w, int revents);
+	ev_io *watcher;
+} ldap_delay_data_t;
+void ldap_delay_cb(EV_P_ ev_timer *w, int revents);
 
 char *cn2name(const char *cn);
 void settings(int argc, char **argv);
@@ -102,8 +102,8 @@ int ldap_start()
 	int opt = 1;
 	struct sockaddr_in servaddr;
 
-	struct ev_loop *loop = EV_DEFAULT;
-	struct ev_io w_accept;
+	ev_loop *loop = EV_DEFAULT;
+	ev_io w_accept;
 
 	if ((serv_sd = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("socket");
@@ -140,11 +140,11 @@ int ldap_start()
 	return 0;
 }
 
-void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
+void accept_cb(ev_loop *loop, ev_io *watcher, int revents)
 {
 	int client_sd;
 
-	struct ev_io *w_client;
+	ev_io *w_client;
 
 	if (EV_ERROR & revents)
 		fail("got invalid event");
@@ -152,7 +152,7 @@ void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
 	if ((client_sd = accept(watcher->fd, NULL, NULL)) < 0)
 		fail("accept error");
 
-	w_client = malloc(sizeof(struct ev_io));
+	w_client = malloc(sizeof(ev_io));
 	if (!w_client)
 		fail("malloc");
 
@@ -160,7 +160,7 @@ void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
 	ev_io_start(loop, w_client);
 }
 
-void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
+void read_cb(ev_loop *loop, ev_io *watcher, int revents)
 {
 	char buf[BUF_SIZE];
 	ssize_t buf_cnt;
@@ -211,7 +211,7 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents)
 	ldapmessage_free(req);
 }
 
-void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_io *watcher)
+void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	ev_tstamp delay = 0.0;
 
@@ -247,8 +247,8 @@ void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_i
 		asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_authMethodNotSupported);
 	}
 	if (delay > 0.0) {
-		struct ev_timer *delay_timer = calloc(1, sizeof(struct ev_timer));
-		ldap_delay_data *data = calloc(1, sizeof(ldap_delay_data));
+		ev_timer *delay_timer = calloc(1, sizeof(ev_timer));
+		ldap_delay_data_t *data = calloc(1, sizeof(ldap_delay_data_t));
 		data->res = res;
 		data->ldapdn = ldapdn;
 		data->watcher = watcher;
@@ -264,7 +264,7 @@ void ldap_bind(int msgid, BindRequest_t * req, struct ev_loop *loop, struct ev_i
 	}
 }
 
-void ldap_search(int msgid, SearchRequest_t * req, struct ev_loop *loop, struct ev_io *watcher)
+void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	/* (user=$username$) => cn=$username$,BASEDN */
 
@@ -324,7 +324,7 @@ void ldap_search(int msgid, SearchRequest_t * req, struct ev_loop *loop, struct 
 	ldapmessage_free(res);
 }
 
-ssize_t ldap_send(LDAPMessage_t * msg, struct ev_loop *loop, struct ev_io *watcher)
+ssize_t ldap_send(LDAPMessage_t *msg, ev_loop *loop, ev_io *watcher)
 {
 	char buf[BUF_SIZE];
 	ssize_t buf_cnt;
@@ -344,11 +344,11 @@ ssize_t ldap_send(LDAPMessage_t * msg, struct ev_loop *loop, struct ev_io *watch
 	return buf_cnt;
 }
 
-int auth_pam(const char *user, const char *pw, const char **msg, ev_tstamp * delay)
+int auth_pam(const char *user, const char *pw, const char **msg, ev_tstamp *delay)
 {
 	char status[BUF_SIZE];
 	int pam_res = -1;
-	auth_pam_data data;
+	auth_pam_data_t data;
 	struct pam_conv conv_info;
 	pam_handle_t *pamh = NULL;
 
@@ -383,7 +383,7 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 {
 	int i;
 	struct pam_response *res = 0;
-	auth_pam_data *data = (auth_pam_data *) appdata_ptr;
+	auth_pam_data_t *data = (auth_pam_data_t *) appdata_ptr;
 
 	if (!resp || !msg || !data)
 		return PAM_CONV_ERR;
@@ -417,16 +417,16 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr)
 {
-	auth_pam_data *data = (auth_pam_data *) appdata_ptr;
+	auth_pam_data_t *data = (auth_pam_data_t *) appdata_ptr;
 
 	/* Only set the delay if the auth failed. */
 	if (PAM_SUCCESS != retval)
 		data->delay = usec_delay * 1.0e-6;
 }
 
-void ldap_delay_cb(struct ev_loop *loop, struct ev_timer *w, int revents)
+void ldap_delay_cb(ev_loop *loop, ev_timer *w, int revents)
 {
-	ldap_delay_data *data = w->data;
+	ldap_delay_data_t *data = w->data;
 
 	ldap_send(data->res, loop, data->watcher);
 	/* Restart the connection watcher. */
