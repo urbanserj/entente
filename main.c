@@ -27,10 +27,9 @@
 #include <netinet/in.h>
 #include <strings.h>
 #include <security/pam_appl.h>
-#define EV_COMPAT3 0 /* Use the ev 4.X API.*/
+#define EV_COMPAT3 0		/* Use the ev 4.X API. */
 #include <ev.h>
 #include "asn1/LDAPMessage.h"
-
 
 #define LISTENQ 128
 #define LDAP_PORT 389
