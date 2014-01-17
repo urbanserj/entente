@@ -26,11 +26,11 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <strings.h>
+#include <security/pam_appl.h>
+#define EV_COMPAT3 0 /* Use the ev 4.X API.*/
 #include <ev.h>
-
 #include "asn1/LDAPMessage.h"
 
-#include <security/pam_appl.h>
 
 #define LISTENQ 128
 #define LDAP_PORT 389
@@ -135,7 +135,7 @@ int ldap_start()
 	ev_io_init(&w_accept, accept_cb, serv_sd, EV_READ);
 	ev_io_start(loop, &w_accept);
 
-	ev_loop(loop, 0);
+	ev_run(loop, 0);
 
 	return 0;
 }
