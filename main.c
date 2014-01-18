@@ -32,10 +32,7 @@
 #include "asn1/LDAPMessage.h"
 
 #define LISTENQ 128
-#define LDAP_PORT 389
 #define BUF_SIZE 16384
-
-#define BASEDN "dc=entente"
 
 #define fail(msg) do { perror(msg); return; } while (0);
 #define ev_close(loop, watcher) do { \
@@ -50,13 +47,6 @@
 #else
 #define LDAP_DEBUG(msg)
 #endif
-
-#define _setenv(name, value) do { \
-	if ( setenv(name, value, 1) < 0 ) { \
-		perror("setenv"); \
-		exit(1); \
-	} \
-} while ( 0 )
 
 int ldap_start();
 void accept_cb(ev_loop *loop, ev_io *watcher, int revents);
@@ -80,13 +70,18 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
 
 char *cn2name(const char *cn);
+
+char *setting_basedn = "dc=entente";
+int setting_port = 389;
+int setting_daemon = 0;
+int setting_loopback = 0;
+int setting_anonymous = 0;
 void settings(int argc, char **argv);
-int daemonize = 0;
 
 int main(int argc, char **argv)
 {
 	settings(argc, argv);
-	if (daemonize && daemon(0, 0)) {
+	if (setting_daemon && daemon(0, 0)) {
 		perror("daemon");
 		exit(1);
 	}
@@ -114,10 +109,8 @@ int ldap_start()
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = htonl((getenv("ENTENTE_LOOPBACK")
-					  && strcmp(getenv("ENTENTE_LOOPBACK"), "false") == 0)
-					 ? INADDR_ANY : INADDR_LOOPBACK);
-	servaddr.sin_port = htons(atoi(getenv("ENTENTE_PORT")));
+	servaddr.sin_addr.s_addr = htonl(setting_loopback ? INADDR_LOOPBACK : INADDR_ANY);
+	servaddr.sin_port = htons(setting_port);
 
 	if (bind(serv_sd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
 		perror("bind");
@@ -232,7 +225,7 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 	BindResponse_t *bindResponse = &response->protocolOp.choice.bindResponse;
 	OCTET_STRING_fromBuf(&bindResponse->matchedDN, (const char *)req->name.buf, req->name.size);
 
-	if (getenv("ENTENTE_ANONYMOUS") && req->name.size == 0) {
+	if (setting_anonymous && req->name.size == 0) {
 		/* allow anonymous */
 		asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_success);
 	} else if (req->authentication.present == AuthenticationChoice_PR_simple) {
@@ -275,7 +268,7 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 	/* (user=$username$) => cn=$username$,BASEDN */
 
 	char user[BUF_SIZE] = "";
-	int bad_dn = strcmp((const char *)req->baseObject.buf, BASEDN) != 0
+	int bad_dn = strcmp((const char *)req->baseObject.buf, setting_basedn) != 0
 	    && strcmp((const char *)req->baseObject.buf, "") != 0;
 
 	AttributeValueAssertion_t *attr = &req->filter.choice.equalityMatch;
@@ -298,7 +291,8 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 		searchResEntry = &res->protocolOp.choice.searchResEntry;
 		strcat(user, "cn=");
 		strcat(user, (const char *)attr->assertionValue.buf);
-		strcat(user, "," BASEDN);
+		strcat(user, ",");
+		strcat(user, setting_basedn);
 
 		OCTET_STRING_fromString(&searchResEntry->objectName, user);
 
@@ -323,7 +317,7 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 		OCTET_STRING_fromString(&searchDone->diagnosticMessage, "This filter isn't support");
 	} else {
 		asn_long2INTEGER(&searchDone->resultCode, LDAPResult__resultCode_success);
-		OCTET_STRING_fromString(&searchDone->matchedDN, BASEDN);
+		OCTET_STRING_fromString(&searchDone->matchedDN, setting_basedn);
 	}
 
 	ldap_send(res, loop, watcher);
@@ -435,7 +429,7 @@ char *cn2name(const char *cn)
 	/* cn=$username$,BASEDN => $username$ */
 	char *pos = index(cn, ',');
 
-	if (!pos || strncmp(cn, "cn=", 3) != 0 || strcmp(pos + 1, BASEDN) != 0)
+	if (!pos || strncmp(cn, "cn=", 3) || strcmp(pos + 1, setting_basedn))
 		return NULL;
 	return strndup(cn + 3, pos - (cn + 3));
 }
@@ -443,36 +437,27 @@ char *cn2name(const char *cn)
 void settings(int argc, char **argv)
 {
 	int c;
-	char buf[8];
 
 	while ((c = getopt(argc, argv, "ab:dlp:")) != -1) {
 		switch (c) {
 		case 'a':
-			_setenv("ENTENTE_ANONYMOUS", "true");
+			setting_anonymous = 1;
 			break;
 		case 'b':
-			_setenv("ENTENTE_BASEDN", optarg);
+			setting_basedn = optarg;
 			break;
 		case 'd':
-			daemonize = 1;
+			setting_daemon = 1;
 			break;
 		case 'l':
-			_setenv("ENTENTE_LOOPBACK", "true");
+			setting_loopback = 1;
 			break;
 		case 'p':
-			_setenv("ENTENTE_PORT", optarg);
+			setting_port = atoi(optarg);
 			break;
 		default:
 			fprintf(stderr, "Usage: %s [-a] [-b dc=entente] [-l] [-p 389] [-d]\n", argv[0]);
 			exit(1);
 		}
-	}
-
-	if (getenv("ENTENTE_BASEDN") == NULL)
-		_setenv("ENTENTE_BASEDN", BASEDN);
-
-	if (getenv("ENTENTE_PORT") == NULL) {
-		sprintf(buf, "%d", LDAP_PORT);
-		_setenv("ENTENTE_PORT", buf);
 	}
 }

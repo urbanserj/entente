@@ -14,18 +14,18 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="ldap server"
 NAME=entente
 DAEMON=/usr/sbin/$NAME
-DAEMON_OPTS=-d
+DAEMON_OPTS="-d -l"
 SCRIPTNAME=/etc/init.d/$NAME
+ENABLED=1
 
-# Exit if the package is not installed
+# Exit if the package is not installed.
 [ -x "$DAEMON" ] || exit 0
 
-# Read configuration variable file if it is present
+# Read configuration variable file if it is present.
 [ -r /etc/default/$NAME ] && . /etc/default/$NAME
-[ -n $ENTENTE_ANONYMOUS ] && export ENTENTE_ANONYMOUS
-[ -n $ENTENTE_BASEDN ] && export ENTENTE_BASEDN
-[ -n $ENTENTE_LOOPBACK ] && export ENTENTE_LOOPBACK
-[ -n $ENTENTE_PORT ] && export ENTENTE_PORT
+
+# Exit if the package is not enabled.
+[ "$ENABLED" != "0" ] || exit 0
 
 . /lib/lsb/init-functions
 
