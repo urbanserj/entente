@@ -36,18 +36,23 @@ Or:
 ### Options
 
 * -a
+
   Allow anonymous access.
 
 * -b basedn
+
   Set the basedn for the ldap server (default: "dc=entente").
 
 * -l
+
   Bind to the loopback interface only.
 
 * -p port
+
   Set local port number (default: 389).
 
 * -d
+
   Run as a daemon.
 
 
