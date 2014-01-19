@@ -128,8 +128,10 @@ void accept_cb(ev_loop *loop, ev_io *watcher, int revents)
 		fail("accept error");
 
 	w_client = malloc(sizeof(ev_io));
-	if (!w_client)
+	if (!w_client) {
+		close(client_sd);
 		fail("malloc");
+	}
 
 	ev_io_init(w_client, read_cb, client_sd, EV_READ);
 	ev_io_start(loop, w_client);
