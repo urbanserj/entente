@@ -189,9 +189,9 @@ void delay_cb(ev_loop *loop, ev_timer *w, int revents)
 {
 	delay_data_t *data = w->data;
 
-	/* Restart the connection watcher if ldap_send() worked. */
-	if (ldap_send(data->message, loop, data->watcher) >= 0)
-		ev_io_start(loop, data->watcher);
+	/* Restart the connection watcher before calling ldap_send(), which can close it on errors. */
+	ev_io_start(loop, data->watcher);
+	ldap_send(data->message, loop, data->watcher);
 	ldapmessage_free(data->message);
 	free(data);
 	free(w);
