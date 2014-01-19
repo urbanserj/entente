@@ -201,12 +201,12 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	ev_tstamp delay = 0.0;
 
-	LDAPMessage_t *response = calloc(1, sizeof(LDAPMessage_t));
-	if (response == NULL)
+	LDAPMessage_t *res = calloc(1, sizeof(LDAPMessage_t));
+	if (res == NULL)
 		fail("calloc");
-	response->messageID = msgid;
-	response->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
-	BindResponse_t *bindResponse = &response->protocolOp.choice.bindResponse;
+	res->messageID = msgid;
+	res->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
+	BindResponse_t *bindResponse = &res->protocolOp.choice.bindResponse;
 	OCTET_STRING_fromBuf(&bindResponse->matchedDN, (const char *)req->name.buf, req->name.size);
 
 	if (setting_anonymous && req->name.size == 0) {
@@ -234,7 +234,7 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 	if (delay > 0.0) {
 		ev_timer *delay_timer = calloc(1, sizeof(ev_timer));
 		delay_data_t *data = calloc(1, sizeof(delay_data_t));
-		data->message = response;
+		data->message = res;
 		data->watcher = watcher;
 		ev_timer_init(delay_timer, delay_cb, delay, 0.0);
 		delay_timer->data = data;
@@ -242,8 +242,8 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 		ev_io_stop(loop, watcher);
 		ev_timer_start(loop, delay_timer);
 	} else {
-		ldap_send(response, loop, watcher);
-		ldapmessage_free(response);
+		ldap_send(res, loop, watcher);
+		ldapmessage_free(res);
 	}
 }
 
