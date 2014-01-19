@@ -35,6 +35,7 @@
 #define BUF_SIZE 16384
 
 #define fail(msg) do { perror(msg); return; } while (0);
+#define fail1(msg) do { perror(msg); return 1; } while (0);
 #define ev_close(loop, watcher) do { \
 	ev_io_stop(loop, watcher); \
 	close(watcher->fd); \
@@ -81,10 +82,8 @@ void settings(int argc, char **argv);
 int main(int argc, char **argv)
 {
 	settings(argc, argv);
-	if (setting_daemon && daemon(0, 0)) {
-		perror("daemon");
-		exit(1);
-	}
+	if (setting_daemon && daemon(0, 0))
+		fail1("daemon");
 	return ldap_start();
 }
 
@@ -93,47 +92,33 @@ int ldap_start()
 	int serv_sd;
 	int opt = 1;
 	struct sockaddr_in servaddr;
-
 	ev_loop *loop = EV_DEFAULT;
 	ev_io w_accept;
 
-	if ((serv_sd = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("socket");
-		return 1;
-	}
-
-	if (setsockopt(serv_sd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-		perror("setsockopt");
-		return 1;
-	}
+	if ((serv_sd = socket(PF_INET, SOCK_STREAM, 0)) < 0)
+		fail1("socket");
+	if (setsockopt(serv_sd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+		fail1("setsockopt");
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(setting_loopback ? INADDR_LOOPBACK : INADDR_ANY);
 	servaddr.sin_port = htons(setting_port);
 
-	if (bind(serv_sd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
-		perror("bind");
-		return 1;
-	}
-
-	if (listen(serv_sd, LISTENQ) < 0) {
-		perror("listen");
-		return 1;
-	}
+	if (bind(serv_sd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
+		fail1("bind");
+	if (listen(serv_sd, LISTENQ) < 0)
+		fail1("listen");
 
 	ev_io_init(&w_accept, accept_cb, serv_sd, EV_READ);
 	ev_io_start(loop, &w_accept);
-
 	ev_run(loop, 0);
-
 	return 0;
 }
 
 void accept_cb(ev_loop *loop, ev_io *watcher, int revents)
 {
 	int client_sd;
-
 	ev_io *w_client;
 
 	if (EV_ERROR & revents)
@@ -175,11 +160,9 @@ void read_cb(ev_loop *loop, ev_io *watcher, int revents)
 	rdecode = asn_DEF_LDAPMessage.ber_decoder(0, &asn_DEF_LDAPMessage, (void **)&req, buf, buf_cnt, 0);
 
 	if (rdecode.code != RC_OK || (ssize_t) rdecode.consumed != buf_cnt) {
-		perror((rdecode.code != RC_OK) ? "der_decoder" : "consumed");
 		ev_close(loop, watcher);
-
 		ldapmessage_free(req);
-		return;
+		fail((rdecode.code != RC_OK) ? "der_decoder" : "consumed");
 	}
 
 	LDAP_DEBUG(req);
@@ -197,7 +180,6 @@ void read_cb(ev_loop *loop, ev_io *watcher, int revents)
 		perror("_|_");
 		ev_close(loop, watcher);
 	}
-
 	ldapmessage_free(req);
 }
 
@@ -266,7 +248,6 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	/* (user=$username$) => cn=$username$,BASEDN */
-
 	char user[BUF_SIZE] = "";
 	int bad_dn = strcmp((const char *)req->baseObject.buf, setting_basedn) != 0
 	    && strcmp((const char *)req->baseObject.buf, "") != 0;
