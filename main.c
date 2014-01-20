@@ -66,7 +66,7 @@ typedef struct {
 	const char *user, *pw;
 	ev_tstamp delay;
 } auth_pam_data_t;
-int auth_pam(const char *user, const char *pw, const char **msg, ev_tstamp *delay);
+int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay);
 int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr);
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
 
@@ -214,9 +214,9 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 		asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_success);
 	} else if (req->authentication.present == AuthenticationChoice_PR_simple) {
 		/* simple auth */
-		const char *user = cn2name((const char *)req->name.buf);
-		const char *pw = (const char *)req->authentication.choice.simple.buf;
-		const char *status = NULL;
+		char *user = cn2name((const char *)req->name.buf);
+		char *pw = (char *)req->authentication.choice.simple.buf;
+		char *status = NULL;
 		if (!user) {
 			asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_invalidDNSyntax);
 		} else if (PAM_SUCCESS != auth_pam(user, pw, &status, &delay)) {
@@ -225,8 +225,8 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 		} else {	/* Success! */
 			asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_success);
 		}
-		free((void *)user);
-		free((void *)status);
+		free(user);
+		free(status);
 	} else {
 		/* sasl or anonymous auth */
 		asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_authMethodNotSupported);
@@ -327,7 +327,7 @@ ssize_t ldap_send(LDAPMessage_t *msg, ev_loop *loop, ev_io *watcher)
 	return buf_cnt;
 }
 
-int auth_pam(const char *user, const char *pw, const char **msg, ev_tstamp *delay)
+int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay)
 {
 	char status[BUF_SIZE];
 	int pam_res = -1;
