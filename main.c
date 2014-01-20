@@ -128,8 +128,7 @@ void accept_cb(ev_loop *loop, ev_io *watcher, int revents)
 	if ((client_sd = accept(watcher->fd, NULL, NULL)) < 0)
 		fail("accept error");
 
-	w_client = malloc(sizeof(ev_io));
-	if (!w_client) {
+	if (!(w_client = malloc(sizeof(ev_io)))) {
 		close(client_sd);
 		fail("malloc");
 	}
@@ -201,10 +200,12 @@ void delay_cb(ev_loop *loop, ev_timer *watcher, int revents)
 void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	ev_tstamp delay = 0.0;
+	LDAPMessage_t *res;
 
-	LDAPMessage_t *res = calloc(1, sizeof(LDAPMessage_t));
-	if (res == NULL)
+	if (!(res = calloc(1, sizeof(LDAPMessage_t)))) {
+		ev_close(loop, watcher);
 		fail("calloc");
+	}
 	res->messageID = msgid;
 	res->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
 	BindResponse_t *bindResponse = &res->protocolOp.choice.bindResponse;
@@ -233,8 +234,15 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 		asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_authMethodNotSupported);
 	}
 	if (delay > 0.0) {
-		ev_timer *delay_timer = calloc(1, sizeof(ev_timer));
-		delay_data_t *data = calloc(1, sizeof(delay_data_t));
+		ev_timer *delay_timer = malloc(sizeof(ev_timer));
+		delay_data_t *data = malloc(sizeof(delay_data_t));
+		if (!delay_timer || !data) {
+			free(delay_timer);
+			free(data);
+			ev_close(loop, watcher);
+			ldapmessage_free(res);
+			fail("malloc");
+		}
 		data->message = res;
 		data->watcher = watcher;
 		ev_timer_init(delay_timer, delay_cb, delay, 0.0);
@@ -263,9 +271,10 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 	SearchResultEntry_t *searchResEntry;
 	SearchResultDone_t *searchDone;
 
-	res = calloc(1, sizeof(LDAPMessage_t));
-	if (res == NULL)
+	if (!(res = calloc(1, sizeof(LDAPMessage_t)))) {
+		ev_close(loop, watcher);
 		fail("calloc");
+	}
 	res->messageID = msgid;
 
 	if (!bad_dn && !bad_filter) {
@@ -367,7 +376,7 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 	if (!resp || !msg || !data)
 		return PAM_CONV_ERR;
 
-	if (NULL == (res = malloc(num_msg * sizeof(struct pam_response))))
+	if (!(res = malloc(num_msg * sizeof(struct pam_response))))
 		return PAM_CONV_ERR;
 
 	for (i = 0; i < num_msg; i++) {
@@ -384,8 +393,7 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 			res[i].resp = strdup(data->pw);
 			break;
 		default:
-			if (res)
-				free(res);
+			free(res);
 			return PAM_CONV_ERR;
 		}
 	}
