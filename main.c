@@ -185,16 +185,16 @@ void read_cb(ev_loop *loop, ev_io *watcher, int revents)
 	ldapmessage_free(req);
 }
 
-void delay_cb(ev_loop *loop, ev_timer *w, int revents)
+void delay_cb(ev_loop *loop, ev_timer *watcher, int revents)
 {
-	delay_data_t *data = w->data;
+	delay_data_t *data = watcher->data;
 
 	/* Restart the connection watcher before calling ldap_send(), which can close it on errors. */
 	ev_io_start(loop, data->watcher);
 	ldap_send(data->message, loop, data->watcher);
 	ldapmessage_free(data->message);
 	free(data);
-	free(w);
+	free(watcher);
 }
 
 void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
