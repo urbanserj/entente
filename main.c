@@ -40,8 +40,9 @@
 	ev_io_stop(loop, watcher); \
 	close(watcher->fd); \
 	free(watcher); \
-} while ( 0 )
+} while (0)
 #define ldapmessage_free(msg) ASN_STRUCT_FREE(asn_DEF_LDAPMessage, msg)
+#define ldapmessage_empty(msg) ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_LDAPMessage, msg)
 
 #ifdef DEBUG
 #define LDAP_DEBUG(msg) asn_fprint(stdout, &asn_DEF_LDAPMessage, msg)
@@ -270,23 +271,18 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 	if (!bad_dn && !bad_filter) {
 		/* result of search */
 		res->protocolOp.present = LDAPMessage__protocolOp_PR_searchResEntry;
-
 		searchResEntry = &res->protocolOp.choice.searchResEntry;
 		strcat(user, "cn=");
 		strcat(user, (const char *)attr->assertionValue.buf);
 		strcat(user, ",");
 		strcat(user, setting_basedn);
-
 		OCTET_STRING_fromString(&searchResEntry->objectName, user);
 
 		if (ldap_send(res, loop, watcher) <= 0) {
-			free(searchResEntry->objectName.buf);
 			ldapmessage_free(res);
 			return;
 		}
-
-		free(searchResEntry->objectName.buf);
-		bzero(searchResEntry, sizeof(*searchResEntry));
+		ldapmessage_empty(res);
 	}
 
 	/* search is done */
