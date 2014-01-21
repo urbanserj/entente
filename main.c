@@ -250,23 +250,21 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	/* (user=$username$) => cn=$username$,BASEDN */
-	char user[BUF_SIZE] = "";
-	int bad_dn = strcmp((const char *)req->baseObject.buf, setting_basedn) != 0
-	    && strcmp((const char *)req->baseObject.buf, "") != 0;
+	char user[BUF_SIZE];
+	LDAPMessage_t *res = XNEW0(LDAPMessage_t, 1);
 
 	AttributeValueAssertion_t *attr = &req->filter.choice.equalityMatch;
+	int bad_dn = strcmp((const char *)req->baseObject.buf, setting_basedn)
+	    && strcmp((const char *)req->baseObject.buf, "");
 	int bad_filter = req->filter.present != Filter_PR_equalityMatch
-	    || strcmp((const char *)attr->attributeDesc.buf, "user") != 0;
+	    || strcmp((const char *)attr->attributeDesc.buf, "user");
 
-	LDAPMessage_t *res = XNEW0(LDAPMessage_t, 1);
-	SearchResultEntry_t *searchResEntry;
-	SearchResultDone_t *searchDone;
 	res->messageID = msgid;
 
 	if (!bad_dn && !bad_filter) {
 		/* result of search */
 		res->protocolOp.present = LDAPMessage__protocolOp_PR_searchResEntry;
-		searchResEntry = &res->protocolOp.choice.searchResEntry;
+		SearchResultEntry_t *searchResEntry = &res->protocolOp.choice.searchResEntry;
 		snprintf(user, BUF_SIZE, "cn=%s,%s", (const char *)attr->assertionValue.buf, setting_basedn);
 		OCTET_STRING_fromString(&searchResEntry->objectName, user);
 
@@ -279,16 +277,16 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 
 	/* search is done */
 	res->protocolOp.present = LDAPMessage__protocolOp_PR_searchResDone;
-	searchDone = &res->protocolOp.choice.searchResDone;
+	SearchResultDone_t *searchResDone = &res->protocolOp.choice.searchResDone;
 	if (bad_dn) {
-		asn_long2INTEGER(&searchDone->resultCode, LDAPResult__resultCode_other);
-		OCTET_STRING_fromString(&searchDone->diagnosticMessage, "baseobject is unvalid");
+		asn_long2INTEGER(&searchResDone->resultCode, LDAPResult__resultCode_other);
+		OCTET_STRING_fromString(&searchResDone->diagnosticMessage, "baseobject is invalid");
 	} else if (bad_filter) {
-		asn_long2INTEGER(&searchDone->resultCode, LDAPResult__resultCode_other);
-		OCTET_STRING_fromString(&searchDone->diagnosticMessage, "This filter isn't support");
+		asn_long2INTEGER(&searchResDone->resultCode, LDAPResult__resultCode_other);
+		OCTET_STRING_fromString(&searchResDone->diagnosticMessage, "filter not supported");
 	} else {
-		asn_long2INTEGER(&searchDone->resultCode, LDAPResult__resultCode_success);
-		OCTET_STRING_fromString(&searchDone->matchedDN, setting_basedn);
+		asn_long2INTEGER(&searchResDone->resultCode, LDAPResult__resultCode_success);
+		OCTET_STRING_fromString(&searchResDone->matchedDN, setting_basedn);
 	}
 
 	ldap_send(res, loop, watcher);
@@ -317,7 +315,7 @@ ssize_t ldap_send(LDAPMessage_t *msg, ev_loop *loop, ev_io *watcher)
 
 int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay)
 {
-	char status[BUF_SIZE];
+	char status[BUF_SIZE] = "";
 	int pam_res = -1;
 	auth_pam_data_t data;
 	struct pam_conv conv_info;
@@ -341,8 +339,6 @@ int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay)
 		/* Check that the account is healthy. */
 		else if (PAM_SUCCESS != (pam_res = pam_acct_mgmt(pamh, PAM_DISALLOW_NULL_AUTHTOK)))
 			sprintf(status, "PAM: user %s - invalid account: %s", user, pam_strerror(pamh, pam_res));
-		else		/* success */
-			status[0] = '\0';
 		pam_end(pamh, PAM_SUCCESS);
 	}
 	*msg = XSTRDUP(status);
