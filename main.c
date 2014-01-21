@@ -74,7 +74,7 @@ typedef struct {
 	ev_tstamp delay;
 } auth_pam_data_t;
 int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay);
-int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr);
+int auth_pam_conv(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr);
 void auth_pam_delay(int retval, unsigned usec_delay, void *appdata_ptr);
 
 char *cn2name(const char *cn);
@@ -324,7 +324,7 @@ int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay)
 	data.user = user;
 	data.pw = pw;
 	data.delay = 0.0;
-	conv_info.conv = &auth_pam_talker;
+	conv_info.conv = &auth_pam_conv;
 	conv_info.appdata_ptr = (void *)&data;
 	/* Start pam. */
 	if (PAM_SUCCESS != (pam_res = pam_start("entente", user, &conv_info, &pamh))) {
@@ -346,20 +346,16 @@ int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay)
 	return pam_res;
 }
 
-int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr)
+int auth_pam_conv(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr)
 {
 	int i;
-	struct pam_response *res = 0;
+	struct pam_response *res;
 	auth_pam_data_t *data = (auth_pam_data_t *) appdata_ptr;
 
 	if (!resp || !msg || !data)
 		return PAM_CONV_ERR;
-	res = XNEW(struct pam_response, num_msg);
+	res = XNEW0(struct pam_response, num_msg);
 	for (i = 0; i < num_msg; i++) {
-		/* initialize to safe values */
-		res[i].resp_retcode = 0;
-		res[i].resp = 0;
-
 		/* select response based on requested output style */
 		switch (msg[i]->msg_style) {
 		case PAM_PROMPT_ECHO_ON:
@@ -373,7 +369,6 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 			return PAM_CONV_ERR;
 		}
 	}
-	/* everything okay, set PAM response values */
 	*resp = res;
 	return PAM_SUCCESS;
 }
