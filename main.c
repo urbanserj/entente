@@ -267,10 +267,7 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 		/* result of search */
 		res->protocolOp.present = LDAPMessage__protocolOp_PR_searchResEntry;
 		searchResEntry = &res->protocolOp.choice.searchResEntry;
-		strcat(user, "cn=");
-		strcat(user, (const char *)attr->assertionValue.buf);
-		strcat(user, ",");
-		strcat(user, setting_basedn);
+		snprintf(user, BUF_SIZE, "cn=%s,%s", (const char *)attr->assertionValue.buf, setting_basedn);
 		OCTET_STRING_fromString(&searchResEntry->objectName, user);
 
 		if (ldap_send(res, loop, watcher) <= 0) {
