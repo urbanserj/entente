@@ -46,6 +46,7 @@
 #define XNEW(type, n) ({void *_p=malloc(n*sizeof(type)); if (!_p) err(EX_OSERR, "malloc"); _p;})
 #define XNEW0(type, n) ({void *_p=calloc(n,sizeof(type)); if (!_p) err(EX_OSERR, "calloc"); _p;})
 #define XSTRDUP(s) ({char *_s=strdup(s); if (!_s) err(EX_OSERR, "strdup"); _s;})
+#define XSTRNDUP(s, n) ({char *_s=strndup(s,n); if (!_s) err(EX_OSERR, "strndup"); _s;})
 #define ldapmessage_free(msg) ASN_STRUCT_FREE(asn_DEF_LDAPMessage, msg)
 #define ldapmessage_empty(msg) ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_LDAPMessage, msg)
 
@@ -400,7 +401,7 @@ char *cn2name(const char *cn)
 
 	if (!pos || strncmp(cn, "cn=", 3) || strcmp(pos + 1, setting_basedn))
 		return NULL;
-	return strndup(cn + 3, pos - (cn + 3));
+	return XSTRNDUP(cn + 3, pos - (cn + 3));
 }
 
 void settings(int argc, char **argv)
