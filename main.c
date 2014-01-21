@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <err.h>
+#include <sysexits.h>
 #include <netinet/in.h>
 #include <strings.h>
 #include <security/pam_appl.h>
@@ -41,6 +43,9 @@
 	close(watcher->fd); \
 	free(watcher); \
 } while (0)
+#define XNEW(type, n) ({void *_p=malloc(n*sizeof(type)); if (!_p) err(EX_OSERR, "malloc"); _p;})
+#define XNEW0(type, n) ({void *_p=calloc(n,sizeof(type)); if (!_p) err(EX_OSERR, "calloc"); _p;})
+#define XSTRDUP(s) ({char *_s=strdup(s); if (!_s) err(EX_OSERR, "strdup"); _s;})
 #define ldapmessage_free(msg) ASN_STRUCT_FREE(asn_DEF_LDAPMessage, msg)
 #define ldapmessage_empty(msg) ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_LDAPMessage, msg)
 
@@ -128,11 +133,7 @@ void accept_cb(ev_loop *loop, ev_io *watcher, int revents)
 	if ((client_sd = accept(watcher->fd, NULL, NULL)) < 0)
 		fail("accept error");
 
-	if (!(w_client = malloc(sizeof(ev_io)))) {
-		close(client_sd);
-		fail("malloc");
-	}
-
+	w_client = XNEW(ev_io, 1);
 	ev_io_init(w_client, read_cb, client_sd, EV_READ);
 	ev_io_start(loop, w_client);
 }
@@ -200,12 +201,8 @@ void delay_cb(ev_loop *loop, ev_timer *watcher, int revents)
 void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 {
 	ev_tstamp delay = 0.0;
-	LDAPMessage_t *res;
+	LDAPMessage_t *res = XNEW0(LDAPMessage_t, 1);
 
-	if (!(res = calloc(1, sizeof(LDAPMessage_t)))) {
-		ev_close(loop, watcher);
-		fail("calloc");
-	}
 	res->messageID = msgid;
 	res->protocolOp.present = LDAPMessage__protocolOp_PR_bindResponse;
 	BindResponse_t *bindResponse = &res->protocolOp.choice.bindResponse;
@@ -234,15 +231,8 @@ void ldap_bind(int msgid, BindRequest_t *req, ev_loop *loop, ev_io *watcher)
 		asn_long2INTEGER(&bindResponse->resultCode, BindResponse__resultCode_authMethodNotSupported);
 	}
 	if (delay > 0.0) {
-		ev_timer *delay_timer = malloc(sizeof(ev_timer));
-		delay_data_t *data = malloc(sizeof(delay_data_t));
-		if (!delay_timer || !data) {
-			free(delay_timer);
-			free(data);
-			ev_close(loop, watcher);
-			ldapmessage_free(res);
-			fail("malloc");
-		}
+		ev_timer *delay_timer = XNEW(ev_timer, 1);
+		delay_data_t *data = XNEW(delay_data_t, 1);
 		data->message = res;
 		data->watcher = watcher;
 		ev_timer_init(delay_timer, delay_cb, delay, 0.0);
@@ -267,14 +257,9 @@ void ldap_search(int msgid, SearchRequest_t *req, ev_loop *loop, ev_io *watcher)
 	int bad_filter = req->filter.present != Filter_PR_equalityMatch
 	    || strcmp((const char *)attr->attributeDesc.buf, "user") != 0;
 
-	LDAPMessage_t *res;
+	LDAPMessage_t *res = XNEW0(LDAPMessage_t, 1);
 	SearchResultEntry_t *searchResEntry;
 	SearchResultDone_t *searchDone;
-
-	if (!(res = calloc(1, sizeof(LDAPMessage_t)))) {
-		ev_close(loop, watcher);
-		fail("calloc");
-	}
 	res->messageID = msgid;
 
 	if (!bad_dn && !bad_filter) {
@@ -362,7 +347,7 @@ int auth_pam(const char *user, const char *pw, char **msg, ev_tstamp *delay)
 			status[0] = '\0';
 		pam_end(pamh, PAM_SUCCESS);
 	}
-	*msg = strdup(status);
+	*msg = XSTRDUP(status);
 	*delay = data.delay;
 	return pam_res;
 }
@@ -375,10 +360,7 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 
 	if (!resp || !msg || !data)
 		return PAM_CONV_ERR;
-
-	if (!(res = malloc(num_msg * sizeof(struct pam_response))))
-		return PAM_CONV_ERR;
-
+	res = XNEW(struct pam_response, num_msg);
 	for (i = 0; i < num_msg; i++) {
 		/* initialize to safe values */
 		res[i].resp_retcode = 0;
@@ -387,10 +369,10 @@ int auth_pam_talker(int num_msg, const struct pam_message **msg, struct pam_resp
 		/* select response based on requested output style */
 		switch (msg[i]->msg_style) {
 		case PAM_PROMPT_ECHO_ON:
-			res[i].resp = strdup(data->user);
+			res[i].resp = XSTRDUP(data->user);
 			break;
 		case PAM_PROMPT_ECHO_OFF:
-			res[i].resp = strdup(data->pw);
+			res[i].resp = XSTRDUP(data->pw);
 			break;
 		default:
 			free(res);
