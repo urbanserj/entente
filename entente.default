@@ -1,4 +1,8 @@
-ENTENTE_ANONYMOUS=true
-#ENTENTE_BASEDN="dc=entente"
-ENTENTE_LOOPBACK=true
-#ENTENTE_PORT=389
+# Whether or not to run entente; set to 0 to disable.
+ENABLED=1
+
+# Set the BASEDN to use.
+BASEDN="dc=entente"
+
+# Set the options to use.
+DAEMON_OPTS="-d -b $BASEDN -p 389 -l -a"

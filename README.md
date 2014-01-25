@@ -35,15 +35,25 @@ Or:
 
 ### Options
 
-* -a (or `ENTENTE_ANONYMOUS=true`) allow anonymous access
+* -a
 
-* -b (or `ENTENTE_BASEDN="dc=entente"`) setup basedn for ldap server
+  Allow anonymous access.
 
-* -l (or `ENTENTE_LOOPBACK=true`) bind entente to loopback interface else bind to all interfaces
+* -b basedn
 
-* -p (or `ENTENTE_PORT=389`) setup local port number
+  Set the basedn for the ldap server (default: "dc=entente").
 
-* -d for daemonizing process
+* -l
+
+  Bind to the loopback interface only.
+
+* -p port
+
+  Set local port number (default: 389).
+
+* -d
+
+  Run as a daemon.
 
 
 Example usage with lighttpd

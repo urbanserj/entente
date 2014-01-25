@@ -1,6 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -Wextra -fno-strict-aliasing
 LDFLAGS=-lev -lpam
+TYPE_RE='ev_[^ ]\+\|[^ ]\+_t'
 
 all: asn1
 	$(CC) -Iasn1/ $(CFLAGS) $(LDFLAGS) main.c asn1/*.c -o entente
@@ -27,3 +28,11 @@ debian:
 
 debclean:
 	debian/rules clean
+
+tidy:
+	# Tidy code using indent.
+	indent -linux -l120 *.c
+	# Remove struct prefix from userdefined types.
+	sed -i 's/struct \('$(TYPE_RE)' \)/\1/g' *.c
+	# Remove space between * and identifier for userdefined types.
+	sed -i 's/\([( \t]\('$(TYPE_RE)'\) \*\+\) /\1/g' *.c
