@@ -1,0 +1,13 @@
+#!/lib/init/init-d-script
+### BEGIN INIT INFO
+# Provides:          entente
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Entente LDAP server
+### END INIT INFO
+
+. /etc/default/entente
+DAEMON=/usr/sbin/entente
+DAEMON_ARGS="-d ${ENTENTE_ARGS}"

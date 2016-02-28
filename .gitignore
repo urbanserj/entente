@@ -1,0 +1,9 @@
+entente
+*.o
+*~
+.vagrant
+debian/*.debhelper.log
+debian/*.debhelper
+debian/*.substvars
+debian/files
+debian/entente

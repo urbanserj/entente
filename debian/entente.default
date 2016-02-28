@@ -1,0 +1,5 @@
+# Additional options that are passed to entente
+ENTENTE_OPTS=""
+
+# NOTICE: Please do *not* include the "-d" or "--daemonize" options
+# in ENTENTE_ARGS above. This option will be added automatically as necessary.

@@ -1,0 +1,12 @@
+[Unit]
+Description=Entente LDAP server
+After=network.target auditd.service
+
+[Service]
+EnvironmentFile=-/etc/default/entente
+ExecStart=/usr/sbin/entente $ENTENTE_OPTS
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target

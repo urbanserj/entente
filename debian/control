@@ -1,0 +1,13 @@
+Source: entente
+Section: admin
+Priority: extra
+Maintainer: Sergey Urbanovich <sergey.urbanovich@gmail.com>
+Build-Depends: debhelper (>= 9), dh-systemd, libev-dev (>= 3.0), libpam0g-dev (>= 0.99.7.1)
+Standards-Version: 3.9.6
+
+Package: entente
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Homepage: http://meow.tratata.org/
+Description: Entente LDAP server
+ Entente LDAP server
